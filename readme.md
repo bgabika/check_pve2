@@ -34,7 +34,7 @@ OK - ceph_ssd disk usage (type: rbd) is 62.29 % (5.88 TB / 9.44 TB).            
 
 <pre><code>
 # cd /usr/lib/nagios/plugins
-# ./check_pve2.py --hostname pve.mydomain.com --api_user monitoring@pve --api_token A12fhaDFCjn92aKt=123f922a-e10b-12z7-e133-Aa3476b866ar --subcommand cluster
+# ./check_pve2.py --hostname pve.mydomain.com --api_user monitoring@pve --api_password nagios --subcommand cluster
 OK - corexcluster cluster is working well.
 
 </code></pre>
