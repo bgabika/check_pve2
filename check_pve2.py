@@ -2,9 +2,9 @@
 # -*- coding: utf-8 -*-
 # ---------------------------------------------------------------
 # COREX Proxmox VE check plugin for Icinga 2
-# Copyright (C) 2019-2022  Gabor Borsos <bg@corex.bg>
+# Copyright (C) 2019-2024  Gabor Borsos <bg@corex.bg>
 # 
-# v1.23 built on 2022.12.25.
+# v1.25 built on 2024.06.03.
 # usage: check_pve2.py --help
 #
 # For bugs and feature requests mailto bg@corex.bg
@@ -25,6 +25,8 @@
 # ---------------------------------------------------------------
 #
 # changelog:
+# 2024.06.03. v1.25  - PVE8 - Ignore the syslog service based on the deprecation in Debian 12.5
+# 2024.04.01. v1.24  - Add ceph-io subcommand
 # 2022.12.13. v1.23  - Add help
 # 2022.12.13. v1.22  - Bugfix, storage Graphite performance output
 # 2022.12.08. v1.21  - Bugfix, storage size zero division
@@ -65,7 +67,6 @@ class CheckPVE:
         self.__cookies = {}
 
         if self.options.api_insecure:
-            # disable urllib3 warning about insecure requests
             requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
 
         if self.options.api_password is not None:
@@ -102,11 +103,11 @@ class CheckPVE:
                               help="Don't verify HTTPS certificate")
 
 
-        check_pve_opt = parser.add_argument_group('check arguments', 'ceph, cluster, cpu, disks_health, memory, pveversion, services, storage, swap')
+        check_pve_opt = parser.add_argument_group('check arguments', 'ceph, ceph_io, cluster, cpu, disks_health, memory, pveversion, services, storage, swap')
         
         check_pve_opt.add_argument("--subcommand",
                                         choices=(
-                                            'ceph', 'cluster', 'cpu', 'disks_health', 'memory', 'pveversion', 'services', 'storage', 'swap'),
+                                            'ceph', 'ceph_io', 'cluster', 'cpu', 'disks_health', 'memory', 'pveversion', 'services', 'storage', 'swap'),
                                         required=True,
                                         help="Select subcommand to use. Some subcommands need warning and critical arguments. \
                                             Disk subcommand needs warning and critical to check wearout state.")
@@ -119,6 +120,12 @@ class CheckPVE:
         check_pve_opt.add_argument('--disk-name', dest='include_disks', action='append', metavar='DISKNAME',
                                         help='Check disks in health check by disk name, --disk-name disk1 --disk-name disk2 ...etc', default=[])
         
+        check_pve_opt.add_argument('--ceph-io-warning', dest='ceph_io_warning', type=int,
+                                help='IO read/write warning threshold for cheph-io checking. Default: 10000 operations/sec', default=10000)
+        
+        check_pve_opt.add_argument('--ceph-byte-warning', dest='ceph_byte_warning', type=int,
+                                help='Byte read/write warning threshold for cheph-io checking. Default: 200MB/sec', default=200)
+
         check_pve_opt.add_argument('--warning', dest='threshold_warning', type=int,
                                 help='Warning threshold for check value. Mutiple thresholds with name:value,name:value')
         
@@ -127,14 +134,12 @@ class CheckPVE:
 
         self.options = parser.parse_args()
 
-        # check args dependencies
         if (self.options.subcommand == "cpu" or self.options.subcommand == "disks_health" or self.options.subcommand == "memory" or \
             self.options.subcommand == "storage" or self.options.subcommand == "swap") and \
             (self.options.threshold_warning is None or self.options.threshold_critical is None):
             
             parser.error(f"--warning and --critical arguments are required for '{self.options.subcommand}' subcommand!")
             
-        # check thresholds scale
         if self.check_thresholds_scale("increase") == False:
             parser.error(f"--warning threshold must be lower then --critical threshold for '{self.options.subcommand}' subcommand!")
         elif self.check_thresholds_scale("decrease") == False:
@@ -146,8 +151,7 @@ class CheckPVE:
         api_url = self.get_url(self.options.subcommand)
         request_output = self.request(api_url)
         
-        # run function by variable name, call function by varible name
-        self.result_list = eval(f"self.check_{self.options.subcommand}" + "(request_output, self.options.subcommand)")
+        eval(f"self.check_{self.options.subcommand}" + "(request_output, self.options.subcommand)")
         self.check_exitcodes(self.result_list)
     
 
@@ -159,6 +163,8 @@ class CheckPVE:
             return self.API_URL.format(hostname=self.options.api_host, port=self.options.api_port, command=f"nodes/{self.options.nodename}/disks/list")
         elif apiurl == "ceph":
             return self.API_URL.format(hostname=self.options.api_host, port=self.options.api_port, command="cluster/ceph/status")
+        elif apiurl == "ceph_io":
+            return self.API_URL.format(hostname=self.options.api_host, port=self.options.api_port, command=f"nodes/{self.options.nodename}/ceph/status")
         elif apiurl == "cluster":
             return self.API_URL.format(hostname=self.options.api_host, port=self.options.api_port, command="cluster/status")
         elif apiurl == "storage":
@@ -249,6 +255,33 @@ class CheckPVE:
             self.output(CheckState.OK, "CEPH cluster is healthy.")
 
 
+    def check_ceph_io(self, perfdata, subcommand):
+        read_bytes_sec = round(int((perfdata["pgmap"]["read_bytes_sec"]))/1048576, 2)
+        write_bytes_sec = round(int((perfdata["pgmap"]["write_bytes_sec"]))/1048576, 2)
+        read_op_per_sec = int((perfdata["pgmap"]["read_op_per_sec"]))
+        write_op_per_sec = int((perfdata["pgmap"]["write_op_per_sec"]))
+        ceph_io_warning = self.options.ceph_io_warning
+        ceph_byte_warning = self.options.ceph_byte_warning
+
+        
+        message = f"CEPH IO operation usage is {read_op_per_sec} ops read / {write_op_per_sec} ops write per seconds.\
+        |'ceph io read per sec'={read_op_per_sec};{ceph_io_warning};;0; 'ceph io write per sec'={write_op_per_sec};{ceph_io_warning};;0;"
+        
+        if ceph_io_warning <= read_op_per_sec or ceph_io_warning <= write_op_per_sec:
+            self.result_list.append(f"WARNING - {message}")
+        else:
+            self.result_list.append(f"OK - {message}")
+
+    
+        message = f"CEPH IO byte usage is {read_bytes_sec} MB read / {write_bytes_sec} MB write per seconds.\
+        |'ceph byte read per sec'={read_bytes_sec};{ceph_byte_warning};;0; 'ceph byte write per sec'={write_bytes_sec};{ceph_byte_warning};;0;"
+        
+        if ceph_byte_warning <= read_bytes_sec or ceph_byte_warning <= write_bytes_sec:
+            self.result_list.append(f"WARNING - {message}")
+        else:
+            self.result_list.append(f"OK - {message}")
+        
+
 
     def check_cluster(self, perfdata, subcommand):
         offline_node_list = []
@@ -317,7 +350,7 @@ class CheckPVE:
             if any("WARNING" in x for x in self.result_list):
                 self.result_list = [x for x in self.result_list if re.search("WARNING -", x) if re.search("CRITICAL -", x)]
 
-        return set(self.result_list)
+        self.result_list = set(self.result_list)
 
 
 
@@ -356,12 +389,13 @@ class CheckPVE:
         for element in request_output:
             service_name = (element["name"])
             service_desc = (element["desc"])
+            service_unit_state = (element["unit-state"])
             service_state = (element["state"])
             service_active_state = (element["active-state"])
 
 
-            if (service_state != "running" or service_active_state != "active") and service_name != "systemd-timesyncd":
-                self.result_list.append(f"WARNING - {service_desc} ({service_name}) is not running.")
+            if (service_state != "running" or service_active_state != "active") and service_unit_state != "not-found":
+                self.result_list.append(f"WARNING - {service_desc} ({service_name}) is {service_state}.")
             else:
                 if not any("WARNING" in x for x in self.result_list):
                     self.result_list.append(f"OK - All services are running.")
@@ -369,7 +403,7 @@ class CheckPVE:
             if any("WARNING" in x for x in self.result_list):
                 self.result_list = [x for x in self.result_list if re.search("WARNING -", x)]
 
-        return set(self.result_list)
+        self.result_list = set(self.result_list)
 
 
 
@@ -418,9 +452,6 @@ class CheckPVE:
                     check_storage_inside()
 
 
-        return self.result_list
-
-
     
     def check_swap(self, request_output, subcommand):
         return self.check_memory(request_output, subcommand)
@@ -428,7 +459,7 @@ class CheckPVE:
 
 
     def check_exitcodes(self, result_list):
-
+        
         if any("CRITICAL" in x for x in result_list):
             [print(x) for x in result_list if re.search("CRITICAL", x)]
         if any("WARNING" in x for x in result_list):
