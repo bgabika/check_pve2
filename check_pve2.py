@@ -25,6 +25,7 @@
 # ---------------------------------------------------------------
 #
 # changelog:
+# 2024.06.03. v1.26  - Bugfix, catch for when ceph io doesn't supply readings
 # 2024.06.03. v1.25  - PVE8 - Ignore the syslog service based on the deprecation in Debian 12.5
 # 2024.04.01. v1.24  - Add ceph-io subcommand
 # 2022.12.13. v1.23  - Add help
@@ -256,10 +257,12 @@ class CheckPVE:
 
 
     def check_ceph_io(self, perfdata, subcommand):
-        read_bytes_sec = round(int((perfdata["pgmap"]["read_bytes_sec"]))/1048576, 2)
-        write_bytes_sec = round(int((perfdata["pgmap"]["write_bytes_sec"]))/1048576, 2)
-        read_op_per_sec = int((perfdata["pgmap"]["read_op_per_sec"]))
-        write_op_per_sec = int((perfdata["pgmap"]["write_op_per_sec"]))
+        pgmap = perfdata["pgmap"]
+        # Set values to zero if the readings are undefined
+        read_bytes_sec = round(int(pgmap.get("read_bytes_sec", 0))/1048576, 2)
+        write_bytes_sec = round(int(pgmap.get("write_bytes_sec", 0))/1048576, 2)
+        read_op_per_sec = int(pgmap.get("read_op_per_sec", 0))
+        write_op_per_sec = int(pgmap.get("write_op_per_sec", 0))
         ceph_io_warning = self.options.ceph_io_warning
         ceph_byte_warning = self.options.ceph_byte_warning
 
