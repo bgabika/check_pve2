@@ -4,7 +4,7 @@
 # COREX Proxmox VE check plugin for Icinga 2
 # Copyright (C) 2019-2024  Gabor Borsos <bg@corex.bg>
 # 
-# v2.1 built on 2026.07.24.
+# v2.0 built on 2026.07.24.
 # usage: check_pve2.py --help
 #
 # For bugs and feature requests mailto bg@corex.bg
