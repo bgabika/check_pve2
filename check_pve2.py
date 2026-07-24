@@ -25,11 +25,11 @@
 # ---------------------------------------------------------------
 #
 # changelog:
-# 2026.07.24. v2.0   - add backup subcommand to check backup tasks
+# 2026.07.24. v2.0   - Add backup subcommand to check backup tasks
 #                    - Bugfix: return UNKNOWN when Ceph I/O readings are unavailable.
-#                    - disk wearout is reversed to match proxmox UI and make more sense (0=no wearout, 100=full wearout)
-#                    - fix output and add verbosity for disks_health output (include wearout details when OK)
-#                    - add per-guest status checks for LXC and QEMU
+#                    - Disk wearout is reversed to match proxmox UI and make more sense (0=no wearout, 100=full wearout)
+#                    - Fix output and add verbosity for disks_health output (include wearout details when OK)
+#                    - Add per-guest status checks for LXC and QEMU
 # 2024.06.03. v1.25  - PVE8 - Ignore the syslog service based on the deprecation in Debian 12.5
 # 2024.04.01. v1.24  - Add ceph-io subcommand
 # 2022.12.13. v1.23  - Add help
