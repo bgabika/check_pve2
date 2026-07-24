@@ -41,19 +41,23 @@ OK - corexcluster cluster is working well.
 
 ### Version
 
- - 1.25
+ - 2.0
 
 ### ToDo
 
  - waiting for bugs or feature requests (-:
 
 ### Changelog
- 
-- 2024.06.03. v1.25  - PVE8 - Ignore the syslog service based on the deprecation in Debian 12.5
-- 2024.04.01. v1.24  - Add ceph-io subcommand
-- 2022.12.13. v1.23  - Add help
-- 2022.12.13. v1.22  - Bugfix, storage Graphite performance output
-- 2022.12.08. v1.21  - Bugfix, storage size zero division
+- 2026.07.24. v2.0	- add backup subcommand to check backup tasks
+                    - Bugfix: return UNKNOWN when Ceph I/O readings are unavailable.
+                    - disk wearout is reversed to match proxmox UI and make more sense (0=no wearout, 100=full wearout)
+                    - fix output and add verbosity for disks_health output (include wearout details when OK)
+                    - add per-guest status checks for LXC and QEMU
+- 2024.06.03. v1.25	- PVE8 - Ignore the syslog service based on the deprecation in Debian 12.5
+- 2024.04.01. v1.24	- Add ceph-io subcommand
+- 2022.12.13. v1.23	- Add help
+- 2022.12.13. v1.22	- Bugfix, storage Graphite performance output
+- 2022.12.08. v1.21	- Bugfix, storage size zero division
 - 2022.12.06. v1.2  - Bugfix, storage check unit bug
 - 2022.10.27. v1.1  - Bugfix, disk-health CRITICAL check
 - 2022.10.23. v1.0  - First release
